@@ -4,10 +4,11 @@ library(AER)
 library(glmmML) #http://www.inside-r.org/packages/cran/glmmML/docs/glmmML
 library(lme4)
 library(stargazer)
+library(sjPlot)
 
 ### LOAD ADJUSTED ARTICLES INTO THE DATASET
 #articles <- read.csv("~/Dropbox/uknews_gender/ukdf_adjusted.csv")
-articles <- read.table("uk_articles_data.csv")
+articles <- read.table("uk_articles_data_notext_notitles.csv")
 
 articles$date <- as.Date(articles$date)
 articles$title <- NULL
@@ -48,28 +49,7 @@ barplot(counts, main="Article Distribution by Section and Publisher",
         xlab="Number of Gears", col=c("darkblue","red", "yellow"),
         legend = rownames(counts), beside=TRUE,  horiz=TRUE)
 
-#### GENDER ####
-# B = BOTH
-# F = WOMEN
-# M = MEN
-# X = UNKNOWN
-# E = ERROR
-# CGENDER:
-# 0 = MALE
-# 1 = FEMALE
-# 2 = BOTH
-# 3 = UNKNOWN OR ERROR
-summary(articles$gender)
-CrossTable(articles$publisher, articles$gender)
-CrossTable(articles$section, articles$gender)
 
-# REMOVE ALL OBSERVATIONS THAT ARE UNKNOWN OR ERRORS
-articles <- subset(articles, cgender<=2)
-# NOW WE ARE DOWN TO 162217 OBSERVATIONS
-
-summary(articles$gender)
-CrossTable(articles$publisher, articles$gender)
-CrossTable(articles$section, articles$gender)
 
 #### DATE ####
 hist(articles$date, "weeks", format = "%d %b")
@@ -89,6 +69,8 @@ summary(articles$days_since_first)
 #### TOTAL_ARTICLES ####
 summary(articles$total_articles)
 hist(articles$total_articles, breaks=200)
+summary(articles$log_total_articles)
+hist(articles$log_total_articles, breaks=200)
 
 #### SOCIAL ####
 ## SET ALL NEGATIVE VALUES TO 0 ##
@@ -116,6 +98,14 @@ p + facet_grid(publisher ~ section)
 p <- ggplot(articles, aes(x=log_wordcount_demeaned, y=log_social, colour=gender)) + geom_point(shape=1) 
 p + facet_grid(publisher ~ section)
 
+# SOCIAL ON TITLE TOKENS
+p <- ggplot(articles, aes(x=title_tokens, y=log_social, colour=gender)) + geom_point(shape=1) 
+p + facet_grid(publisher ~ section)
+
+# SOCIAL ON log transformed TITLE TOKENS
+p <- ggplot(articles, aes(x=log_title_tokens, y=log_social, colour=gender)) + geom_point(shape=1) 
+p + facet_grid(publisher ~ section)
+
 # SOCIAL ON WEEKDAY
 p <- ggplot(articles, aes(x=weekday, y=log_social, colour=gender)) + geom_point(shape=1) 
 p + facet_grid(publisher ~ section)
@@ -125,11 +115,11 @@ p <- ggplot(articles, aes(x=month, y=log_social, colour=gender)) + geom_point(sh
 p + facet_grid(publisher ~ section)
 
 # SOCIAL ON TOTAL_ARTICLES
-p <- ggplot(articles, aes(x=log_total_articles, y=log_social, colour=gender)) + geom_point(shape=1) 
+p <- ggplot(articles, aes(x=total_articles, y=log_social, colour=gender)) + geom_point(shape=1) 
 p + facet_grid(publisher ~ section)
 
-# SOCIAL ON TITLE_TOKENS
-p <- ggplot(articles, aes(x=log_title_tokens, y=log_social, colour=gender)) + geom_point(shape=1) 
+# SOCIAL ON log transformed TOTAL_ARTICLES
+p <- ggplot(articles, aes(x=log_total_articles, y=log_social, colour=gender)) + geom_point(shape=1) 
 p + facet_grid(publisher ~ section)
 
 
@@ -137,7 +127,8 @@ p + facet_grid(publisher ~ section)
 ####  TESTING POISSON MODELS ####
 #################################
 
-articles$gF <- factor(articles$gender, levels = c("M","F","B"))
+#articles$gF <- factor(articles$gender, levels = c("M","F","B"))
+articles$gF <- factor(articles$gender, levels = c("M","F"))
 articles$sF <- factor(articles$section, levels = c("news",
                                                         "lifestyle",
                                                         "moneyfinance",
@@ -151,24 +142,11 @@ guardian <- subset(articles, publisher=="guardian")
 dailymail <- subset(articles, publisher=="dailymail")
 telegraph <- subset(articles, publisher=="telegraph")
 
-
-################################
-summary(t1 <- glm(social~log_title_tokens + gF,data=guardian,family=poisson))
-## calculate and store predicted values
-guardian$t1hat <- predict(m1, type="response")
-
-## order by program and then by math
-guardian <- guardian[with(guardian, order(gF, log_title_tokens)), ]
-
-## create the plot
-ggplot(guardian, aes(x = log_title_tokens, y = t1hat, colour = gF)) +
-  geom_point(aes(y = social), alpha=.5, position=position_jitter(h=.2)) +
-  geom_line(size = 1) +
-  labs(x = "Words in Title", y = "Social Media Impressions")
 ################################
 paper = dailymail
 
 summary(t1 <- glm(social~log_title_tokens + I(log_title_tokens^2) + gF + sF + gF:sF,data=paper,family=poisson))
+dispersiontest(t1)
 ## calculate and store predicted values
 paper$t1hat <- predict(t1, type="response")
 
@@ -185,47 +163,90 @@ ggplot(paper, aes(x = log_title_tokens, y = t1hat, colour = gF)) +
   theme(plot.title = element_text(lineheight=.8, face="bold"))
 
 
+################################
+paper = guardian
+
+summary(t1 <- glm(social~log_title_tokens + I(log_title_tokens^2) + gF + sF + gF:sF,data=paper,family=poisson))
+dispersiontest(t1)
+## calculate and store predicted values
+paper$t1hat <- predict(t1, type="response")
+
+## order by program and then by math
+paper <- paper[with(paper, order(log_title_tokens, gF)), ]
+
+## create the plot
+ggplot(paper, aes(x = log_title_tokens, y = t1hat, colour = gF)) +
+  #  geom_point(aes(y = social), alpha=.5, position=position_jitter(h=.2)) +
+  facet_grid(sF ~ ., scales="free") + 
+  geom_line(size = 1) +
+  labs(x = "log(Words in Title)", y = "Social Media Impressions") + 
+  ggtitle("Predicted Guardian Social Media Impressions Per Article") + 
+  theme(plot.title = element_text(lineheight=.8, face="bold"))
+################################
+paper = telegraph
+
+summary(t1 <- glm(social~log_title_tokens + I(log_title_tokens^2) + gF + sF + gF:sF,data=paper,family=poisson))
+dispersiontest(t1)
+## calculate and store predicted values
+paper$t1hat <- predict(t1, type="response")
+
+## order by program and then by math
+paper <- paper[with(paper, order(log_title_tokens, gF)), ]
+
+## create the plot
+ggplot(paper, aes(x = log_title_tokens, y = t1hat, colour = gF)) +
+  #  geom_point(aes(y = social), alpha=.5, position=position_jitter(h=.2)) +
+  facet_grid(sF ~ ., scales="free") + 
+  geom_line(size = 1) +
+  labs(x = "log(Words in Title)", y = "Social Media Impressions") + 
+  ggtitle("Predicted Telegraph Social Media Impressions Per Article") + 
+  theme(plot.title = element_text(lineheight=.8, face="bold"))
+
 
 ##################################################
 ####          MULTILEVEL POISSON MODELS       ####
 ####  ACCOUNTING FOR VARIATION BETWEEN PEOPLE ####
 ##################################################
 
-summary(f1 <- glmer(social~ title_tokens + I(title_tokens^2) + total_articles + wdF + gF+ sF + gF:sF + (1|bylines), data=guardian, family=poisson))
+summary(g1 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + (1|bylines), data=guardian, family=poisson))
+summary(g2 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + total_articles + (1|bylines), data=guardian, family=poisson))
+summary(g3 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + (1|bylines), data=guardian, family=poisson))
+summary(g4 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + (1|bylines), data=guardian, family=poisson))
+summary(g5 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + (1|bylines), data=guardian, family=poisson))
+summary(g6 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + gF + gF:sF + (1|bylines), data=guardian, family=poisson))
+# get the deviances
+anova(g1, g2, g3,g4,g5,g6, test = "F")
+# DEVIANCE TABLE 
+#g1 21888485
+#g2 21888475 <-- is total articles not very important?
+#g3 21888435 <-- maybe clustering? total_articles does seem important theoretically, so keep it in
+#g4 21824029
+#g5 21622303
+#g6 21607227 <-- this is the best fit
+stargazer(g1,g2,g3,g4,g5,g6, type="text")
 
-summary(f2 <- glmer(social~ title_tokens + I(title_tokens^2) + total_articles + wdF + gF+ sF + gF:sF + (1|bylines), data=dailymail, family=poisson))
+summary(d1 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + (1|bylines), data=dailymail, family=poisson))
+summary(d2 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + total_articles + (1|bylines), data=dailymail, family=poisson))
+summary(d3 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + (1|bylines), data=dailymail, family=poisson))
+summary(d4 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + (1|bylines), data=dailymail, family=poisson))
+summary(d5 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + (1|bylines), data=dailymail, family=poisson))
+summary(d6 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + gF + gF:sF + (1|bylines), data=dailymail, family=poisson))
+# get the deviances 
+anova(d1, d2, d3, d4, d5, d6, test = "F")
+stargazer(g1,g2,g3,g4,g5,g6, type="text")
 
-summary(f3 <- glmer(social~ title_tokens + I(title_tokens^2) + total_articles + wdF + gF+ sF + gF:sF + (1|bylines), data=telegraph, family=poisson))
+summary(t1 <- glmer(social~ log_title_tokens + (1|bylines), data=telegraph, family=poisson))
+summary(t2 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + total_articles + (1|bylines), data=telegraph, family=poisson))
+summary(t3 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + (1|bylines), data=telegraph, family=poisson))
+summary(t4 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + (1|bylines), data=telegraph, family=poisson))
+summary(t5 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + (1|bylines), data=telegraph, family=poisson))
+summary(t6 <- glmer(social~ log_title_tokens +  I(log_title_tokens^2) + log_total_articles + wdF + sF + gF + gF:sF + (1|bylines), data=telegraph, family=poisson))
+anova(t1, t2, t3, t4, t5, t6, test = "F")
+stargazer(t1,t2,t3,t4,t5,t6, type="text")
 
-stargazer(f1,f2,f3, type="text")
-
-summary(f2 <- glmer(social~ title_tokens + I(title_tokens^2) + wdF + gF + sF + (1|bylines), data=telegraph, family=poisson))
-
-summary(f3 <- glmer(social~ title_tokens + I(title_tokens^2) + wdF + gF + sF + (1|bylines), data=guardian, family=poisson))
-
-summary(f4 <- glmer(social~ title_tokens + I(title_tokens^2) + wdF + gF + sF + (1|bylines), data=dailymail, family=poisson))
-
-summary(f5 <- glmer(social~ title_tokens + I(title_tokens^2) + wdF + gF + sF + (1|bylines), data=dailymail, family=poisson))
-
-
-#(social ~ gF + sF + gF:sF + wordcount, family=poisson, data=guardian))
-#dispersiontest(m1)
-#(est <- cbind(Estimate = coef(m1), confint(m1)))
-#exp(est)
-
-#summary(m2 <- glmmadmb(social~ wordcount + (1|bylines), 
-#                        data=articles, 
-#                        zeroInflation=FALSE, 
-#                        family="poisson"))
-
-#ggplot(people, aes(x=log_pop, y=article_count)) + geom_point(shape=1) 
-
-
-summary(fit <- glm(social~log_title_tokens + gF + sF + gF:sF,data=guardian,family=poisson))
-(est <- cbind(Estimate = coef(fit), confint(fit)))
-exp(est)       
-dispersiontest(fit)
+## SHOW ALL MODELS
+stargazer(g6,d6,t6, type="text")
 
 
 #### WRITE TO FILE####
-#write.table(articles, "uk_articles_data.csv")
+#write.table(articles, "uk_articles_data_notext_notitles.csv")
