@@ -247,6 +247,90 @@ stargazer(t1,t2,t3,t4,t5,t6, type="text")
 ## SHOW ALL MODELS
 stargazer(g6,d6,t6, type="text")
 
+#################################################
+################## PLOT MODELS ##################
+#################################################
+
+### PLOT FINAL FOR THE GUARDIAN
+### PER SECTION
+dataset = articles[FALSE,]
+for (g in c("F", "M")) {
+  for(s in c("news", "lifestyle", "moneyfinance","opinion", "sciencetech", "sport")){
+    ds <- data.frame(
+      gF = g,
+      sF = s,
+      wdF = factor(0),
+      log_total_articles = mean(guardian$log_total_articles),
+      log_title_tokens = seq(min(guardian$log_title_tokens[guardian$gF==g & guardian$sF==s]), max(guardian$log_title_tokens[guardian$gF==g & guardian$sF==s]), 0.1),
+      bylines="ami sedghi"
+    )
+    dataset <- rbind(dataset, ds)
+  }
+}
+
+dataset$g6hat = predict(g6, newdata=dataset)
+
+ggplot(dataset, aes(x = log_title_tokens, y = g6hat, colour = gF)) +
+  facet_grid(sF ~ ., scales="free") + 
+  geom_line(size = 1) +
+  labs(x = "log(Words in Title)", y = "Social Media Impressions") + 
+  ggtitle("Predicted Guardian Social Media Impressions Per Article") + 
+  theme(plot.title = element_text(lineheight=.8, face="bold"))
+
+
+### PLOT FINAL FOR THE DAILY MAIL
+### PER SECTION 
+dataset = articles[FALSE,]
+for (g in c("F", "M")) {
+  for(s in c("news", "lifestyle", "moneyfinance","opinion", "sciencetech", "sport")){
+    ds <- data.frame(
+      gF = g,
+      sF = s,
+      wdF = factor(0),
+      log_total_articles = mean(dailymail$log_total_articles),
+      log_title_tokens = seq(min(dailymail$log_title_tokens[dailymail$gF==g & dailymail$sF==s]), max(dailymail$log_title_tokens[dailymail$gF==g & dailymail$sF==s]), 0.1),
+      bylines="a n wilson"
+    )
+    dataset <- rbind(dataset, ds)
+  }
+}
+
+dataset$d6hat = predict(d6, newdata=dataset)
+
+ggplot(dataset, aes(x = log_title_tokens, y = d6hat, colour = gF)) +
+  facet_grid(sF ~ ., scales="free") + 
+  geom_line(size = 1) +
+  labs(x = "log(Words in Title)", y = "Social Media Impressions") + 
+  ggtitle("Predicted DAILY MAIL Social Media Impressions Per Article") + 
+  theme(plot.title = element_text(lineheight=.8, face="bold"))
+
+
+### PLOT FINAL FOR THE TELEGRAPH
+### PER SECTION 
+dataset = articles[FALSE,]
+for (g in c("F", "M")) {
+  for(s in c("news", "lifestyle", "moneyfinance","opinion", "sciencetech", "sport")){
+    ds <- data.frame(
+      gF = g,
+      sF = s,
+      wdF = factor(0),
+      log_total_articles = mean(telegraph$log_total_articles),
+      log_title_tokens = seq(min(telegraph$log_title_tokens[telegraph$gF==g & telegraph$sF==s]), max(telegraph$log_title_tokens[telegraph$gF==g & telegraph$sF==s]), 0.1),
+      bylines="emma barnett"
+    )
+    dataset <- rbind(dataset, ds)
+  }
+}
+
+dataset$t6hat = predict(t6, newdata=dataset)
+
+ggplot(dataset, aes(x = log_title_tokens, y = t6hat, colour = gF)) +
+  facet_grid(sF ~ ., scales="free") + 
+  geom_line(size = 1) +
+  labs(x = "log(Words in Title)", y = "Social Media Impressions") + 
+  ggtitle("Predicted TELEGRAPH Social Media Impressions Per Article") + 
+  theme(plot.title = element_text(lineheight=.8, face="bold"))
+
 
 #### WRITE TO FILE####
 #write.table(articles, "uk_articles_data_notext_notitles.csv")
